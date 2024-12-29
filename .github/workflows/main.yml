@@ -55,13 +55,21 @@ jobs:
       with:
         name: kernel-build
 
+    - name: Extract kernel build artifact
+      run: |
+        mkdir -p build_directory
+        tar -xzvf kernel_build.tar.gz -C build_directory
+        ls -l build_directory # Debugging step to verify contents
+
+    - name: Copy Dockerfile to build directory
+      run: |
+        cp path/to/Dockerfile build_directory/Dockerfile
+        ls -l build_directory # Debugging step to confirm Dockerfile is present
+
     - name: Build and Push Docker Image
       run: |
         IMAGE_TAG=ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)
-        mkdir -p build_directory
-        tar -xzvf kernel_build.tar.gz -C build_directory
-        ls -l build_directory # Debugging step to confirm files are extracted
-        docker build build_directory --file build_directory/path/to/Dockerfile --tag $IMAGE_TAG
+        docker build build_directory --tag $IMAGE_TAG
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
         docker push $IMAGE_TAG
