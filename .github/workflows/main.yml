@@ -50,10 +50,18 @@ jobs:
     - name: Checkout source code
       uses: actions/checkout@v4
 
+    - name: Download kernel build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: kernel-build
+
     - name: Build and Push Docker Image
       run: |
         IMAGE_TAG=ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)
-        docker build . --file path/to/Dockerfile --tag $IMAGE_TAG
+        mkdir -p build_directory
+        tar -xzvf kernel_build.tar.gz -C build_directory
+        ls -l build_directory # Debugging step to confirm files are extracted
+        docker build build_directory --file build_directory/path/to/Dockerfile --tag $IMAGE_TAG
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
         docker push $IMAGE_TAG
