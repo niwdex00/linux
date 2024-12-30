@@ -1,4 +1,4 @@
-name: Kernel Build CI
+name: Kernel Build and Push CI
 
 on:
   push:
@@ -7,73 +7,77 @@ on:
     branches: [ "rpi-6.6.y" ]
 
 jobs:
-  build:
+  kernel-build-and-push:
     runs-on: ubuntu-latest
 
     steps:
-    # Checkout the source code
-    - name: Checkout source code
-      uses: actions/checkout@v4
+      # Step 1: Checkout source code
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
-    # Install dependencies
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu make bc bison flex libssl-dev libelf-dev
+      # Step 2: Install dependencies
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu make bc bison flex libssl-dev libelf-dev
 
-    # Build the kernel
-    - name: Build kernel
-      run: |
-        mkdir -p build_output/boot/overlays
-        export ARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        make bcm2712_defconfig
-        make -j$(nproc) Image.gz dtbs modules
-        cp arch/arm64/boot/Image.gz build_output/boot/kernel8.img
-        cp arch/arm64/boot/dts/broadcom/*.dtb build_output/boot/ || true
-        cp arch/arm64/boot/dts/overlays/*.dtb* build_output/boot/overlays/ || true
-        make modules_install INSTALL_MOD_PATH=$(pwd)/build_output
+      # Step 3: Build the kernel
+      - name: Build kernel
+        run: |
+          mkdir -p build_output/boot/overlays
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          make bcm2712_defconfig
+          make -j$(nproc) Image.gz dtbs modules
+          cp arch/arm64/boot/Image.gz build_output/boot/kernel8.img
+          cp arch/arm64/boot/dts/broadcom/*.dtb build_output/boot/ || true
+          cp arch/arm64/boot/dts/overlays/*.dtb* build_output/boot/overlays/ || true
+          make modules_install INSTALL_MOD_PATH=$(pwd)/build_output
 
-    # Package the kernel build
-    - name: Package kernel build
-      run: |
-        tar -czvf kernel_build.tar.gz -C build_output .
+      # Step 4: Package the kernel build
+      - name: Package kernel build
+        run: |
+          tar -czvf kernel_build.tar.gz -C build_output .
 
-    # Upload the kernel build artifact
-    - name: Upload build artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: kernel-build
-        path: kernel_build.tar.gz
-        retention-days: 90
+      # Step 5: Upload the kernel build artifact
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-build
+          path: kernel_build.tar.gz
+          retention-days: 90
 
-    # Set up Dockerfile in the build directory
-    - name: Set up Dockerfile
-      run: |
-        mkdir -p build_output
-        echo '
-        FROM ubuntu:20.04
-        COPY . /kernel-build
-        WORKDIR /kernel-build
-        CMD ["ls", "-l"]
-        ' > build_output/Dockerfile
+      # Step 6: Set up Dockerfile in the build directory
+      - name: Set up Dockerfile
+        run: |
+          mkdir -p build_output
+          echo '
+          FROM ubuntu:20.04
+          COPY . /kernel-build
+          WORKDIR /kernel-build
+          CMD ["ls", "-l"]
+          ' > build_output/Dockerfile
 
-    # Debugging step to confirm the files
-    - name: Confirm files
-      run: ls -la build_output
+      # Step 7: Debugging step to confirm the files
+      - name: Confirm files
+        run: ls -la build_output
 
-    # Build the Docker image
-    - name: Build Docker image
-      run: |
-        export IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/kernel-image:${{ github.run_number }}"
-        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-        docker build "build_output" -f "build_output/Dockerfile" -t "$IMAGE_TAG"
-        
-    # Push the Docker image to GHCR
-    - name: Push Docker image
-      env:
-        CR_PAT: ${{ secrets.CR_PAT }}
-        IMAGE_TAG: ${{ env.IMAGE_TAG }}
-      run: |
-        echo "${CR_PAT}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-        docker push "$IMAGE_TAG"
+      # Step 8: Set up Docker image tag
+      - name: Set IMAGE_TAG
+        run: echo "IMAGE_TAG=ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)" >> $GITHUB_ENV
+
+      # Step 9: Log in to GitHub Container Registry
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # Step 10: Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build "build_output" -f "build_output/Dockerfile" -t "$IMAGE_TAG"
+
+      # Step 11: Push Docker image to GHCR
+      - name: Push Docker image
+        run: |
+          docker push "$IMAGE_TAG"
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
