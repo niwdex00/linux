@@ -11,14 +11,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # Checkout the source code
     - name: Checkout source code
       uses: actions/checkout@v4
 
+    # Install dependencies
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc-aarch64-linux-gnu make bc bison flex libssl-dev libelf-dev
 
+    # Build the kernel
     - name: Build kernel
       run: |
         mkdir -p build_output/boot/overlays
@@ -31,10 +34,12 @@ jobs:
         cp arch/arm64/boot/dts/overlays/*.dtb* build_output/boot/overlays/ || true
         make modules_install INSTALL_MOD_PATH=$(pwd)/build_output
 
+    # Package the kernel build
     - name: Package kernel build
       run: |
         tar -czvf kernel_build.tar.gz -C build_output .
 
+    # Upload the kernel build artifact
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
       with:
@@ -42,24 +47,30 @@ jobs:
         path: kernel_build.tar.gz
         retention-days: 90
 
-    - name: Prepare Docker image build
+    # Set up Dockerfile in the build directory
+    - name: Set up Dockerfile
       run: |
-        mkdir -p build_directory
-        echo "FROM ubuntu:20.04" > build_directory/Dockerfile
-        echo "COPY . /build" >> build_directory/Dockerfile
-        echo "WORKDIR /build" >> build_directory/Dockerfile
-        echo "CMD [\"bash\"]" >> build_directory/Dockerfile
-        ls -l build_directory # Debugging step to confirm Dockerfile is present
+        mkdir -p build_output
+        echo '
+        FROM ubuntu:20.04
+        COPY . /kernel-build
+        WORKDIR /kernel-build
+        CMD ["ls", "-l"]
+        ' > build_output/Dockerfile
 
-    - name: Build the Docker image
+    # Build the Docker image
+    - name: Build Docker image
+      env:
+        IMAGE_TAG: ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)
       run: |
-        IMAGE_TAG=ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)
-        docker build build_directory --file build_directory/Dockerfile --tag $IMAGE_TAG
+        docker build build_output --file build_output/Dockerfile --tag $IMAGE_TAG
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-    - name: Push the Docker image
+    # Push the Docker image to GHCR
+    - name: Push Docker image
       env:
+        CR_PAT: ${{ secrets.CR_PAT }}
         IMAGE_TAG: ${{ env.IMAGE_TAG }}
       run: |
-        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        echo "${CR_PAT}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
         docker push $IMAGE_TAG
