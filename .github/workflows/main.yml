@@ -58,12 +58,16 @@ jobs:
         CMD ["ls", "-l"]
         ' > build_output/Dockerfile
 
+    # Debugging step to confirm the files
+    - name: Confirm files
+      run: ls -la build_output
+
     # Build the Docker image
     - name: Build Docker image
       env:
         IMAGE_TAG: ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)
       run: |
-        docker build build_output -f build_output/Dockerfile -t $IMAGE_TAG
+        docker build "build_output" -f "build_output/Dockerfile" -t "$IMAGE_TAG"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
     # Push the Docker image to GHCR
@@ -73,4 +77,4 @@ jobs:
         IMAGE_TAG: ${{ env.IMAGE_TAG }}
       run: |
         echo "${CR_PAT}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-        docker push $IMAGE_TAG
+        docker push "$IMAGE_TAG"
