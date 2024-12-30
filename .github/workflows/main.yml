@@ -64,12 +64,11 @@ jobs:
 
     # Build the Docker image
     - name: Build Docker image
-      env:
-        IMAGE_TAG: ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)
       run: |
-        docker build "build_output" -f "build_output/Dockerfile" -t "$IMAGE_TAG"
+        export IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/kernel-image:${{ github.run_number }}"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-
+        docker build "build_output" -f "build_output/Dockerfile" -t "$IMAGE_TAG"
+        
     # Push the Docker image to GHCR
     - name: Push Docker image
       env:
