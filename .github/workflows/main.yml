@@ -1,4 +1,4 @@
-name: Kernel Build and Docker Image CI
+name: Kernel Build CI
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ "rpi-6.6.y" ]
 
 jobs:
-  kernel-build:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -42,34 +42,24 @@ jobs:
         path: kernel_build.tar.gz
         retention-days: 90
 
-  docker-build-and-push:
-    needs: kernel-build
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout source code
-      uses: actions/checkout@v4
-
-    - name: Download kernel build artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: kernel-build
-
-    - name: Extract kernel build artifact
+    - name: Prepare Docker image build
       run: |
         mkdir -p build_directory
-        tar -xzvf kernel_build.tar.gz -C build_directory
-        ls -l build_directory # Debugging step to verify contents
-
-    - name: Copy Dockerfile to build directory
-      run: |
-        cp path/to/Dockerfile build_directory/Dockerfile
+        echo "FROM ubuntu:20.04" > build_directory/Dockerfile
+        echo "COPY . /build" >> build_directory/Dockerfile
+        echo "WORKDIR /build" >> build_directory/Dockerfile
+        echo "CMD [\"bash\"]" >> build_directory/Dockerfile
         ls -l build_directory # Debugging step to confirm Dockerfile is present
 
-    - name: Build and Push Docker Image
+    - name: Build the Docker image
       run: |
         IMAGE_TAG=ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)
-        docker build build_directory --tag $IMAGE_TAG
+        docker build build_directory --file build_directory/Dockerfile --tag $IMAGE_TAG
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+
+    - name: Push the Docker image
+      env:
+        IMAGE_TAG: ${{ env.IMAGE_TAG }}
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
         docker push $IMAGE_TAG
