@@ -3,7 +3,8 @@ FROM debian:bullseye
 
 # Set build arguments
 ARG ARCH=arm64
-ARG KERNEL_VERSION=rpi-6.12.y_20241206_2
+ARG KERNEL_TAG=rpi-6.12.y_20241206_2
+ARG OUTPUT_DIR=/output
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
@@ -16,16 +17,21 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone the repository and build the kernel
+# Set working directory
 WORKDIR /usr/src
-RUN git clone --depth 1 --branch $KERNEL_VERSION https://github.com/raspberrypi/linux.git kernel && \
-    cd kernel && \
-    make ARCH=$ARCH bcm2711_defconfig && \
-    make ARCH=$ARCH -j$(nproc)
 
-# Copy the compiled kernel
-RUN mkdir -p /output && cp kernel/arch/$ARCH/boot/Image /output/kernel.img
+# Clone the repository
+RUN git clone https://github.com/raspberrypi/linux.git kernel
 
-# Final image
+# Checkout the specified tag and build the kernel
+WORKDIR /usr/src/kernel
+RUN git checkout tags/${KERNEL_TAG} -b build && \
+    make ARCH=${ARCH} bcm2711_defconfig && \
+    make ARCH=${ARCH} -j$(nproc)
+
+# Copy the built kernel to the output directory
+RUN mkdir -p ${OUTPUT_DIR} && cp arch/${ARCH}/boot/Image ${OUTPUT_DIR}/kernel.img
+
+# Final image with the kernel
 FROM scratch
 COPY --from=0 /output/kernel.img /kernel.img
