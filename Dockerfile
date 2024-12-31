@@ -3,7 +3,7 @@ FROM debian:bullseye
 
 # Set build arguments
 ARG ARCH=arm64
-ARG KERNEL_VERSION=raspberrypi-kernel_6.6  # Specify the branch or tag directly
+ARG KERNEL_VERSION=rpi-6.12.y_20241206_2
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
