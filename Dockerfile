@@ -1,21 +1,32 @@
 # Base image
-FROM ubuntu:20.04
+FROM debian:bullseye
 
-# Set environment variables
-ENV DEBIAN_FRONTEND=noninteractive
+# Set build arguments
+ARG ARCH=arm64
+ARG KERNEL_VERSION=6.6
 
-# Install any required dependencies
-RUN apt-get update && apt-get install -y tar && apt-get clean
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    bc \
+    libncurses5-dev \
+    bison \
+    flex \
+    libssl-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create a directory for the kernel build
-WORKDIR /kernel
+# Download and build the kernel
+WORKDIR /usr/src
+RUN wget https://github.com/raspberrypi/linux/archive/refs/tags/raspberrypi-kernel_$KERNEL_VERSION.tar.gz -O kernel.tar.gz && \
+    tar -xf kernel.tar.gz && \
+    cd linux-raspberrypi-kernel_$KERNEL_VERSION && \
+    make ARCH=$ARCH bcm2711_defconfig && \
+    make ARCH=$ARCH -j$(nproc)
 
-# Copy the kernel build artifact into the image
-COPY kernel_build.tar.gz /kernel/
+# Copy the compiled kernel
+RUN mkdir -p /output && cp arch/$ARCH/boot/Image /output/kernel.img
 
-# Extract the kernel build artifact
-RUN tar -xzvf kernel_build.tar.gz -C /kernel
-
-# Set the entry point or command (optional)
-# This example just keeps the container running
-CMD ["bash"]
+# Final image
+FROM scratch
+COPY --from=0 /output/kernel.img /
