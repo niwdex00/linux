@@ -1,58 +1,30 @@
-name: Kernel Build CI
+name: Build and Push Kernel Image
 
 on:
   push:
-    branches: [ "rpi-6.6.y" ]
-  pull_request:
-    branches: [ "rpi-6.6.y" ]
+    branches:
+      - '**'
+  workflow_dispatch:
 
 jobs:
-  build-and-push:
+  build-push:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout source code
-      uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu make bc bison flex libssl-dev libelf-dev tar xz-utils
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-    - name: Build kernel
-      run: |
-        mkdir -p build_output/boot/overlays
-        export ARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        make bcm2712_defconfig
-        make -j$(nproc) Image.gz dtbs modules
-        cp arch/arm64/boot/Image.gz build_output/boot/kernel8.img
-        cp arch/arm64/boot/dts/broadcom/*.dtb build_output/boot/ || true
-        cp arch/arm64/boot/dts/overlays/*.dtb* build_output/boot/overlays/ || true
-        make modules_install INSTALL_MOD_PATH=$(pwd)/build_output
-
-    - name: Package kernel build
-      run: tar -czvf kernel_build.tar.gz -C build_output .
-
-    - name: Upload build artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: kernel-build
-        path: kernel_build.tar.gz
-        retention-days: 90
-
-    - name: Log in to GitHub Container Registry
-      run: |
-        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Login to GitHub Container Registry
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
     - name: Build and Push Docker Image
       run: |
-        IMAGE_TAG=ghcr.io/${{ github.repository_owner }}/kernel-image:$(date +%s)
-        echo "Building Docker image with tag: $IMAGE_TAG"
-        docker build . --file Dockerfile --tag $IMAGE_TAG
-        echo "Pushing Docker image: $IMAGE_TAG"
-        docker push $IMAGE_TAG
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        docker build \
+          --build-arg KERNEL_VERSION=5.15 \
+          -t ghcr.io/${{ github.actor }}/pi-kernel:latest \
+          -t ghcr.io/${{ github.actor }}/pi-kernel:${{ github.sha }} .
+        docker push ghcr.io/${{ github.actor }}/pi-kernel:latest
+        docker push ghcr.io/${{ github.actor }}/pi-kernel:${{ github.sha }}
