@@ -3,7 +3,7 @@ FROM debian:bullseye
 
 # Set build arguments
 ARG ARCH=arm64
-ARG KERNEL_TAG=rpi-6.12.y_20241206_2
+ARG KERNEL_BRANCH=rpi-5.13.y
 ARG OUTPUT_DIR=/output
 
 # Install dependencies
@@ -15,21 +15,23 @@ RUN apt-get update && apt-get install -y \
     flex \
     libssl-dev \
     git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /usr/src
 
-# Clone the repository
-RUN git clone https://github.com/raspberrypi/linux.git kernel
+# Clone the Raspberry Pi kernel repository
+RUN git clone --branch ${KERNEL_BRANCH} --depth 1 https://github.com/raspberrypi/linux.git kernel
 
-# Checkout the specified tag and build the kernel
+# Change to the kernel directory
 WORKDIR /usr/src/kernel
-RUN git checkout tags/${KERNEL_TAG} -b build && \
-    make ARCH=${ARCH} bcm2711_defconfig && \
+
+# Build the kernel
+RUN make ARCH=${ARCH} bcm2711_defconfig && \
     make ARCH=${ARCH} -j$(nproc)
 
-# Copy the built kernel to the output directory
+# Copy the built kernel image to the output directory
 RUN mkdir -p ${OUTPUT_DIR} && cp arch/${ARCH}/boot/Image ${OUTPUT_DIR}/kernel.img
 
 # Final image with the kernel
