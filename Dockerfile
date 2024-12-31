@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     bc \
     libncurses5-dev \
+    libncurses-dev \
     bison \
     flex \
     libssl-dev \
@@ -36,9 +37,9 @@ RUN if [ ! -f "arch/${ARCH}/configs/bcm2711_defconfig" ]; then \
     exit 1; \
     fi
 
-# Build the kernel
+# Build the kernel with verbose output
 RUN make ARCH=${ARCH} bcm2711_defconfig && \
-    make ARCH=${ARCH} -j$(nproc || echo 1)
+    make ARCH=${ARCH} -j$(nproc || echo 1) V=1 || (cat /usr/src/kernel/Makefile && tail -n 50 /usr/src/kernel/arch/${ARCH}/logs)
 
 # Copy the built kernel image to the output directory
 RUN mkdir -p ${OUTPUT_DIR} && cp arch/${ARCH}/boot/Image ${OUTPUT_DIR}/kernel.img
